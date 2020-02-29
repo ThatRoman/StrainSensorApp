@@ -1,0 +1,117 @@
+#include "sensordisplayrk.h"
+#include "ui_sensordisplayrk.h"
+
+
+SensorDisplayRK::SensorDisplayRK(QWidget *parent)
+    : QMainWindow(parent)
+    , ui(new Ui::SensorDisplayRK){
+    ui->setupUi(this);
+
+    timer = new QTimer(this);
+    connect(timer,SIGNAL(timeout()),this,SLOT(sensorDataRequest()));
+    timer->start(1000);
+
+}
+
+SensorDisplayRK::~SensorDisplayRK(){
+    delete ui;
+}
+
+void delay(int delayMsec) // Function used for delays
+{
+    QTime dieTime= QTime::currentTime().addMSecs(delayMsec);
+    while (QTime::currentTime() < dieTime)
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+}
+
+QString getLatestFileInDir (QString &sFileDirectory){ // function searches specified Directory for CSV files
+    QDir directory(sFileDirectory);                   // starting from the end and returns QString with the latest filename
+    // Take all files in LatestFileDirectory directory, reverse order
+    // and combine first element with LatestFileDirectory into a string
+    QStringList fileList = directory.entryList(QStringList() << "*.csv" << "*.CSV", QDir::Files, QDir::Reversed);
+    if (fileList.isEmpty()) {
+        qWarning() << "Error! Please check if you specified correct path to *.CSV files and it is not empty";
+        return "Error from file search function";
+    }
+    QString filePath = sFileDirectory + fileList[0];
+    //    qInfo() << "Returning full file path - " << filePath;
+    return filePath;
+}
+
+QStringList getSensorData (QHash<qint16,QStringList> SensorList,QString &filePath){
+
+
+    QFile file(filePath);// Open a *.csv file to read using file path from above
+
+    if (!file.open(QIODevice::ReadOnly)) { // Check if there are any errors with openning the file
+        qDebug() << file.errorString();
+    }
+    QStringList gotSensors;// Create a List to add only new sensor Names
+    QStringList sensorDataOutput { SensoReqN, 0, 0, "" };// create a QStringList for output and access outside while loop
+
+    while (!file.atEnd()){// open and loop through file line by line till the end of file
+
+        QString lineLoop =  file.readLine();
+        // split sensorN and readings for a line and read current sensorN (',' - is a separator)
+        QStringList data = lineLoop.split(',').replaceInStrings("\r\n","");
+        // For each line in the file loop through exisint QHash and find corresponding key and update reading,temp & timestamp
+        if (data[0] == SensoReqN){
+            sensorDataOutput[1] = data[1];
+            sensorDataOutput[2] = data[2];
+            sensorDataOutput[3] = data[3];
+
+        }
+
+        //append to the current sensor list if not in there THIS WORKS DO NOT TOUCH
+        if (std::find(gotSensors.begin(), gotSensors.end(), data[0]) == gotSensors.end()){
+            gotSensors << data[0];
+            //            qInfo() << "Sensor N" << data[0] << "appended gotSensors now has: " << gotSensors;
+            //            qInfo() << "***Sensors in the file are: " << gotSensors;
+        }
+
+        //        qInfo() << "Current file cursos is at" << file.pos()
+        //         << " testSensor N is - " << sensorDataOutput[0] <<
+        //                   "\n testSensor reading is" << sensorDataOutput[1] <<
+        //                   "\n testSensor temp is" << sensorDataOutput[2];
+    }
+    file.close();
+    qInfo() << "***********************Done. File is closed***********************";
+    return  sensorDataOutput;
+}
+
+void SensorDisplayRK::sensorDataRequest()
+{
+    qInfo() << "Starting application... reading sensor data";
+
+    while(true){
+        // Specify file Directory eg. "D:/Qt/Projects/QtClockToSensor/"
+        QString sFileDirectory = "D:/Qt/Projects/StrainSensorApp/SensorDataFolder/";
+        QString SensorReqN = "5026";
+        ui->groupBox5000->setTitle("5000");
+        QString filePath = getLatestFileInDir(sFileDirectory);
+        qInfo() << "Using file:" << filePath;
+
+        QStringList Output = getSensorData(SensorList, filePath);
+        qInfo() << QString::number(Output[1].toDouble(), 'E', 2);
+
+        ui->lcdNumber5000->display(Output[1].toDouble());
+        // set delay(mSec) not to overload system
+        delay(5000);
+        if (Output[0].toInt() && Output[1].toDouble() && Output[0].toDouble()){
+            qInfo() << "Everything is OK. getSensorData() function output is " <<  Output;
+        }
+        else {qDebug() << "Can not cast getSensorData() output into integers and doubles";}
+
+    }
+    qInfo() << "Thank you for using the app. Have a good day!";
+
+}
+
+
+
+int main()
+{
+
+    return 0;
+}
+
